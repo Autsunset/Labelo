@@ -1,0 +1,11 @@
+# Labelo - YOLO标签工具集依赖
+
+# 核心依赖
+opencv-python==4.8.0.76
+numpy==1.24.3
+
+# Web界面依赖
+Flask==2.3.2
+
+# 其他依赖
+Pillow==9.4.0
