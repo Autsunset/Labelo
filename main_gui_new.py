@@ -51,11 +51,11 @@ class ToolFunctions:
             save_results(images_without_labels)
     
     @staticmethod
-    def check_label_counts(label_dir):
+    def check_label_counts(label_dir, threshold=1):
         from check_label_counts import check_label_counts, analyze_label_content
-        stats = check_label_counts(label_dir)
+        stats = check_label_counts(label_dir, threshold)
         if stats['files_with_multiple_labels']:
-            analyze_label_content(label_dir)
+            analyze_label_content(label_dir, threshold)
     
     @staticmethod
     def check_label_count_class(label_dir, output_file):
@@ -124,14 +124,69 @@ class ToolFunctions:
         from huafen import main
         # 将输入和输出目录作为参数传递给huafen模块的main函数
         main(input_dir, output_dir)
+    
+    @staticmethod
+    def sort_images_by_labels(image_dir, label_dir, classes_file, output_dir):
+        """根据标签类别将图片分类到不同文件夹
+        
+        Args:
+            image_dir: 图片文件夹路径
+            label_dir: 标签文件夹路径
+            classes_file: 类别文件 (classes.txt) 路径
+            output_dir: 输出文件夹路径
+        """
+        from sort_images_by_labels import sort_images_by_labels
+        sort_images_by_labels(image_dir, label_dir, classes_file, output_dir)
+    
+    @staticmethod
+    def sam_to_yolo(input_dir, output_dir):
+        """将xanylableing的sam标签转换为YOLO格式
+        
+        Args:
+            input_dir: 包含图像和sam标签的目录
+            output_dir: 输出YOLO标签的目录
+        """
+        from convert_sam_to_yolo import convert_sam_to_yolo
+        convert_sam_to_yolo(input_dir, output_dir)
+    
+    @staticmethod
+    def find_extreme_area_labels(label_dir, image_dir, above_percent=150, below_percent=50):
+        """找出标签面积中位数，并找出大于面积中位数或小于中位数XX%的标签
+        
+        Args:
+            label_dir: 标签文件所在目录
+            image_dir: 图像文件所在目录
+            above_percent: 大于中位数的百分比阈值，默认150%
+            below_percent: 小于中位数的百分比阈值，默认50%
+        """
+        from find_extreme_area_labels import find_extreme_area_labels
+        find_extreme_area_labels(label_dir, image_dir, above_percent, below_percent)
 
 # 主应用类
 class YoloLabelToolsApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Labelo")
-        self.root.geometry("1000x700")
+        
+        # 获取屏幕分辨率并自适应窗口大小
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # 设置窗口大小为屏幕的90%
+        window_width = int(screen_width * 0.7)
+        window_height = int(screen_height * 0.7)
+        
+        # 确保窗口大小不小于最小尺寸
+        window_width = max(window_width, 800)
+        window_height = max(window_height, 600)
+        
+        self.root.geometry(f"{window_width}x{window_height}")
         self.root.resizable(True, True)
+        
+        # 窗口居中显示
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.root.geometry(f"+{x}+{y}")
         
         # 配置文件路径
         self.config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -323,6 +378,14 @@ class YoloLabelToolsApp:
                 "VOC转YOLO": {
                     "func": self.create_voc_to_yolo_function,
                     "desc": "VOC格式转YOLO格式"
+                },
+                "SAM标签转YOLO": {
+                    "func": self.create_sam_to_yolo_function,
+                    "desc": "将xanylableing的sam标签转换为YOLO格式"
+                },
+                "标签面积极端值": {
+                    "func": self.create_find_extreme_area_labels_function,
+                    "desc": "找出标签面积中位数及极端面积标签"
                 }
             },
             "数据管理": {
@@ -333,6 +396,10 @@ class YoloLabelToolsApp:
                 "按标签分离图像": {
                     "func": self.create_separate_images_by_labels_function,
                     "desc": "按标签分离图像到不同文件夹"
+                },
+                "按标签分类图像": {
+                    "func": self.create_sort_images_by_labels_function,
+                    "desc": "根据标签类别将图片分类到不同文件夹"
                 },
                 "移动图像到文件夹": {
                     "func": self.create_move_images_to_folder_function,
@@ -445,6 +512,7 @@ class YoloLabelToolsApp:
         
         # 检查标签数量
         self.check_counts_var = tk.StringVar(value=config.get("check_counts", ""))
+        self.check_counts_threshold_var = tk.StringVar(value=config.get("check_counts_threshold", "1"))
         
         # 检查标签和类别
         self.check_count_class_var = tk.StringVar(value=config.get("check_count_class", ""))
@@ -488,6 +556,22 @@ class YoloLabelToolsApp:
         # 划分数据集
         self.huafen_input_var = tk.StringVar(value=config.get("huafen_input", ""))
         self.huafen_output_var = tk.StringVar(value=config.get("huafen_output", ""))
+        
+        # 按标签分类图像
+        self.sort_images_var = tk.StringVar(value=config.get("sort_images", ""))
+        self.sort_labels_var = tk.StringVar(value=config.get("sort_labels", ""))
+        self.sort_classes_var = tk.StringVar(value=config.get("sort_classes", ""))
+        self.sort_output_var = tk.StringVar(value=config.get("sort_output", ""))
+        
+        # SAM标签转YOLO
+        self.sam_input_var = tk.StringVar(value=config.get("sam_input", ""))
+        self.sam_output_var = tk.StringVar(value=config.get("sam_output", ""))
+        
+        # 标签面积极端值分析
+        self.extreme_area_labels_var = tk.StringVar(value=config.get("extreme_area_labels", ""))
+        self.extreme_area_images_var = tk.StringVar(value=config.get("extreme_area_images", ""))
+        self.extreme_area_above_var = tk.StringVar(value=config.get("extreme_area_above", "150"))
+        self.extreme_area_below_var = tk.StringVar(value=config.get("extreme_area_below", "50"))
         
         # 数据增强
         self.augmentation_images_var = tk.StringVar(value=config.get("augmentation_images", ""))
@@ -644,14 +728,18 @@ class YoloLabelToolsApp:
         """创建检查标签数量功能界面"""
         frame = self.function_frames["检查标签数量"]
         
-        note_label = ttk.Label(frame, text="备注：检查标签文件中的标签数量，列出标签数量大于1的文件")
+        note_label = ttk.Label(frame, text="备注：检查标签文件中的标签数量，列出标签数量大于设定阈值的文件")
         note_label.pack(anchor=tk.W, pady=(0, 15))
         
         ttk.Label(frame, text="标签文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
         input_frame = ttk.Frame(frame)
-        input_frame.pack(fill=tk.X, pady=(0, 20))
+        input_frame.pack(fill=tk.X, pady=(0, 10))
         ttk.Entry(input_frame, textvariable=self.check_counts_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         ttk.Button(input_frame, text="浏览", command=self.browse_check_counts).pack(side=tk.RIGHT)
+        
+        ttk.Label(frame, text="阈值:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(frame, text="列出标签数量大于此值的文件").pack(anchor=tk.W, pady=(0, 10))
+        ttk.Entry(frame, textvariable=self.check_counts_threshold_var, width=10).pack(anchor=tk.W, pady=(0, 20))
         
         ttk.Button(frame, text="开始检查", command=self.run_check_label_counts, style='TButton').pack(anchor=tk.CENTER, pady=20)
         
@@ -774,6 +862,64 @@ class YoloLabelToolsApp:
         ttk.Button(output_frame, text="浏览", command=self.browse_voc_output).pack(side=tk.RIGHT)
         
         ttk.Button(frame, text="开始转换", command=self.run_voc_to_yolo, style='TButton').pack(anchor=tk.CENTER, pady=20)
+        
+    def create_sam_to_yolo_function(self):
+        """创建SAM标签转YOLO功能界面"""
+        frame = self.function_frames["SAM标签转YOLO"]
+        
+        note_label = ttk.Label(frame, text="备注：将xanylableing的sam标签转换为YOLO格式的矩形框标签")
+        note_label.pack(anchor=tk.W, pady=(0, 15))
+        
+        # 输入文件夹
+        ttk.Label(frame, text="输入文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        input_frame = ttk.Frame(frame)
+        input_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(input_frame, textvariable=self.sam_input_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(input_frame, text="浏览", command=self.browse_sam_input).pack(side=tk.RIGHT)
+        
+        # 输出文件夹
+        ttk.Label(frame, text="输出文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        output_frame = ttk.Frame(frame)
+        output_frame.pack(fill=tk.X, pady=(0, 20))
+        ttk.Entry(output_frame, textvariable=self.sam_output_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(output_frame, text="浏览", command=self.browse_sam_output).pack(side=tk.RIGHT)
+        
+        # 执行按钮
+        ttk.Button(frame, text="开始转换", command=self.run_sam_to_yolo, style='TButton').pack(anchor=tk.CENTER, pady=20)
+        
+    def create_find_extreme_area_labels_function(self):
+        """创建标签面积极端值分析功能界面"""
+        frame = self.function_frames["标签面积极端值"]
+        
+        note_label = ttk.Label(frame, text="备注：找出标签面积中位数，并找出大于面积中位数或小于中位数XX%的标签")
+        note_label.pack(anchor=tk.W, pady=(0, 15))
+        
+        # 标签文件夹
+        ttk.Label(frame, text="标签文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        labels_frame = ttk.Frame(frame)
+        labels_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(labels_frame, textvariable=self.extreme_area_labels_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(labels_frame, text="浏览", command=self.browse_extreme_area_labels).pack(side=tk.RIGHT)
+        
+        # 图像文件夹
+        ttk.Label(frame, text="图像文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        images_frame = ttk.Frame(frame)
+        images_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(images_frame, textvariable=self.extreme_area_images_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(images_frame, text="浏览", command=self.browse_extreme_area_images).pack(side=tk.RIGHT)
+        
+        # 大于中位数百分比阈值
+        ttk.Label(frame, text="大于中位数百分比(%):", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(frame, text="找出面积大于中位数此百分比的标签（默认150，即1.5倍）").pack(anchor=tk.W, pady=(0, 5))
+        ttk.Entry(frame, textvariable=self.extreme_area_above_var, width=10).pack(anchor=tk.W, pady=(0, 10))
+        
+        # 小于中位数百分比阈值
+        ttk.Label(frame, text="小于中位数百分比(%):", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(frame, text="找出面积小于中位数此百分比的标签（默认50，即一半）").pack(anchor=tk.W, pady=(0, 5))
+        ttk.Entry(frame, textvariable=self.extreme_area_below_var, width=10).pack(anchor=tk.W, pady=(0, 20))
+        
+        # 执行按钮
+        ttk.Button(frame, text="开始分析", command=self.run_find_extreme_area_labels, style='TButton').pack(anchor=tk.CENTER, pady=20)
         
     def create_delete_images_without_labels_function(self):
         """创建删除无标签图像功能界面"""
@@ -945,6 +1091,45 @@ class YoloLabelToolsApp:
         
         # 执行按钮
         ttk.Button(frame, text="开始划分", command=self.run_huafen, style='TButton').pack(anchor=tk.CENTER, pady=20)
+        
+    def create_sort_images_by_labels_function(self):
+        """创建按标签分类图像功能界面"""
+        frame = self.function_frames["按标签分类图像"]
+        
+        # 功能说明
+        note_label = ttk.Label(frame, text="备注：根据标签类别将图片分类到不同文件夹")
+        note_label.pack(anchor=tk.W, pady=(0, 15))
+        
+        # 图片文件夹选择
+        ttk.Label(frame, text="图片文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        images_frame = ttk.Frame(frame)
+        images_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(images_frame, textvariable=self.sort_images_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(images_frame, text="浏览", command=self.browse_sort_images).pack(side=tk.RIGHT)
+        
+        # 标签文件夹选择
+        ttk.Label(frame, text="标签文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        labels_frame = ttk.Frame(frame)
+        labels_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(labels_frame, textvariable=self.sort_labels_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(labels_frame, text="浏览", command=self.browse_sort_labels).pack(side=tk.RIGHT)
+        
+        # 类别文件选择
+        ttk.Label(frame, text="类别文件 (classes.txt):", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        classes_frame = ttk.Frame(frame)
+        classes_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(classes_frame, textvariable=self.sort_classes_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(classes_frame, text="浏览", command=self.browse_sort_classes).pack(side=tk.RIGHT)
+        
+        # 输出文件夹选择
+        ttk.Label(frame, text="输出文件夹:", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        output_frame = ttk.Frame(frame)
+        output_frame.pack(fill=tk.X, pady=(0, 20))
+        ttk.Entry(output_frame, textvariable=self.sort_output_var, width=50).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(output_frame, text="浏览", command=self.browse_sort_output).pack(side=tk.RIGHT)
+        
+        # 执行按钮
+        ttk.Button(frame, text="开始分类", command=self.run_sort_images_by_labels, style='TButton').pack(anchor=tk.CENTER, pady=20)
         
     def create_data_augmentation_function(self):
         """创建数据增强功能界面"""
@@ -1137,6 +1322,46 @@ class YoloLabelToolsApp:
         folder = filedialog.askdirectory()
         if folder:
             self.huafen_output_var.set(folder)
+    
+    def browse_sort_images(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.sort_images_var.set(folder)
+    
+    def browse_sort_labels(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.sort_labels_var.set(folder)
+    
+    def browse_sort_classes(self):
+        file = filedialog.askopenfilename(filetypes=[("文本文件", "*.txt"), ("所有文件", "*")])
+        if file:
+            self.sort_classes_var.set(file)
+    
+    def browse_sort_output(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.sort_output_var.set(folder)
+    
+    def browse_sam_input(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.sam_input_var.set(folder)
+    
+    def browse_sam_output(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.sam_output_var.set(folder)
+    
+    def browse_extreme_area_labels(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.extreme_area_labels_var.set(folder)
+    
+    def browse_extreme_area_images(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.extreme_area_images_var.set(folder)
     
     def browse_augmentation_images(self):
         folder = filedialog.askdirectory()
@@ -1413,17 +1638,25 @@ class YoloLabelToolsApp:
     
     def run_check_label_counts(self):
         label_dir = self.check_counts_var.get()
+        threshold = self.check_counts_threshold_var.get()
         
         if not label_dir:
             messagebox.showerror("错误", "请选择标签文件夹")
             return
         
+        if not threshold.isdigit():
+            messagebox.showerror("错误", "阈值必须是数字")
+            return
+        
+        threshold = int(threshold)
+        
         try:
             # 保存配置
             self.config["check_counts"] = label_dir
+            self.config["check_counts_threshold"] = str(threshold)
             self.save_config()
             
-            ToolFunctions.check_label_counts(label_dir)
+            ToolFunctions.check_label_counts(label_dir, threshold)
             messagebox.showinfo("成功", "标签数量检查完成！")
         except Exception as e:
             messagebox.showerror("错误", f"检查失败：{str(e)}")
@@ -2135,6 +2368,109 @@ class YoloLabelToolsApp:
                 messagebox.showerror("错误", f"数据集划分失败：{str(e)}")
             
             self.root.after(0, show_error)
+    
+    def run_sam_to_yolo(self):
+        """将xanylableing的sam标签转换为YOLO格式"""
+        input_dir = self.sam_input_var.get()
+        output_dir = self.sam_output_var.get()
+        
+        if not input_dir or not output_dir:
+            messagebox.showerror("错误", "请选择输入文件夹和输出文件夹")
+            return
+        
+        try:
+            # 保存配置
+            self.config["sam_input"] = input_dir
+            self.config["sam_output"] = output_dir
+            self.save_config()
+            
+            # 清空输出日志
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "开始SAM标签转YOLO...\n")
+            
+            # 执行转换操作
+            ToolFunctions.sam_to_yolo(input_dir, output_dir)
+            
+            # 显示完成消息
+            messagebox.showinfo("成功", "SAM标签转YOLO完成！")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"转换失败：{str(e)}")
+    
+    def run_find_extreme_area_labels(self):
+        """找出标签面积中位数及极端面积标签"""
+        label_dir = self.extreme_area_labels_var.get()
+        image_dir = self.extreme_area_images_var.get()
+        above_percent = self.extreme_area_above_var.get()
+        below_percent = self.extreme_area_below_var.get()
+        
+        if not label_dir or not image_dir:
+            messagebox.showerror("错误", "请选择标签文件夹和图像文件夹")
+            return
+        
+        if not above_percent.isdigit():
+            messagebox.showerror("错误", "大于中位数百分比必须是数字")
+            return
+        
+        if not below_percent.isdigit():
+            messagebox.showerror("错误", "小于中位数百分比必须是数字")
+            return
+        
+        above_percent = int(above_percent)
+        below_percent = int(below_percent)
+        
+        try:
+            # 保存配置
+            self.config["extreme_area_labels"] = label_dir
+            self.config["extreme_area_images"] = image_dir
+            self.config["extreme_area_above"] = str(above_percent)
+            self.config["extreme_area_below"] = str(below_percent)
+            self.save_config()
+            
+            # 清空输出日志
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "开始分析标签面积极端值...\n")
+            
+            # 执行分析操作
+            ToolFunctions.find_extreme_area_labels(label_dir, image_dir, above_percent, below_percent)
+            
+            # 显示完成消息
+            messagebox.showinfo("成功", "标签面积极端值分析完成！")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"分析失败：{str(e)}")
+    
+    def run_sort_images_by_labels(self):
+        """根据标签类别将图片分类到不同文件夹"""
+        image_dir = self.sort_images_var.get()
+        label_dir = self.sort_labels_var.get()
+        classes_file = self.sort_classes_var.get()
+        output_dir = self.sort_output_var.get()
+        
+        if not image_dir or not label_dir or not classes_file or not output_dir:
+            messagebox.showerror("错误", "请选择图片文件夹、标签文件夹、类别文件和输出文件夹")
+            return
+        
+        try:
+            # 保存配置
+            self.config["sort_images"] = image_dir
+            self.config["sort_labels"] = label_dir
+            self.config["sort_classes"] = classes_file
+            self.config["sort_output"] = output_dir
+            self.save_config()
+            
+            # 清空输出日志
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "开始按标签分类图像...\n")
+            
+            # 执行分类操作
+            ToolFunctions.sort_images_by_labels(image_dir, label_dir, classes_file, output_dir)
+            
+            # 显示完成消息
+            messagebox.showinfo("成功", "图像分类完成！")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"分类失败：{str(e)}")
 
 # 主函数
 if __name__ == "__main__":

@@ -120,6 +120,21 @@ class ToolFunctions:
     def convert_labelme_to_yolo(input_folder, output_folder):
         from convert_labelme_to_yolo import main as labelme_to_yolo_main
         return labelme_to_yolo_main(input_folder, output_folder)
+    
+    @staticmethod
+    def sort_images_by_labels(image_dir, label_dir, classes_file, output_dir):
+        from sort_images_by_labels import sort_images_by_labels
+        return sort_images_by_labels(image_dir, label_dir, classes_file, output_dir)
+    
+    @staticmethod
+    def sam_to_yolo(input_dir, output_dir):
+        from convert_sam_to_yolo import convert_sam_to_yolo
+        return convert_sam_to_yolo(input_dir, output_dir)
+    
+    @staticmethod
+    def find_extreme_area_labels(label_dir, image_dir, above_percent=150, below_percent=50):
+        from find_extreme_area_labels import find_extreme_area_labels
+        return find_extreme_area_labels(label_dir, image_dir, above_percent, below_percent)
 
 
 FUNCTIONS_CONFIG = {
@@ -196,7 +211,8 @@ FUNCTIONS_CONFIG = {
         "检查标签数量": {
             "desc": "检查标签文件中的标签数量",
             "fields": [
-                {"name": "label_folder", "label": "标签文件夹", "type": "folder"}
+                {"name": "label_folder", "label": "标签文件夹", "type": "folder"},
+                {"name": "threshold", "label": "阈值", "type": "number", "default": 1}
             ],
             "action": "check_counts"
         },
@@ -247,6 +263,24 @@ FUNCTIONS_CONFIG = {
                 {"name": "output_folder", "label": "YOLO输出文件夹", "type": "folder"}
             ],
             "action": "labelme_to_yolo"
+        },
+        "SAM标签转YOLO": {
+            "desc": "将xanylableing的sam标签转换为YOLO格式",
+            "fields": [
+                {"name": "input_dir", "label": "输入文件夹", "type": "folder"},
+                {"name": "output_dir", "label": "输出文件夹", "type": "folder"}
+            ],
+            "action": "sam_to_yolo"
+        },
+        "标签面积极端值": {
+            "desc": "找出标签面积中位数及极端面积标签",
+            "fields": [
+                {"name": "label_dir", "label": "标签文件夹", "type": "folder"},
+                {"name": "image_dir", "label": "图像文件夹", "type": "folder"},
+                {"name": "above_percent", "label": "大于中位数百分比(%)", "type": "number", "default": 150},
+                {"name": "below_percent", "label": "小于中位数百分比(%)", "type": "number", "default": 50}
+            ],
+            "action": "find_extreme_area_labels"
         }
     },
     "数据管理": {
@@ -283,6 +317,16 @@ FUNCTIONS_CONFIG = {
                 {"name": "output_folder", "label": "输出文件夹", "type": "folder"}
             ],
             "action": "huafen"
+        },
+        "按标签分类图像": {
+            "desc": "根据标签类别将图片分类到不同文件夹",
+            "fields": [
+                {"name": "image_dir", "label": "图片文件夹", "type": "folder"},
+                {"name": "label_dir", "label": "标签文件夹", "type": "folder"},
+                {"name": "classes_file", "label": "类别文件 (classes.txt)", "type": "file"},
+                {"name": "output_dir", "label": "输出文件夹", "type": "folder"}
+            ],
+            "action": "sort_images_by_labels"
         }
     },
     "其他功能": {
@@ -358,7 +402,8 @@ def execute_function():
             )
         elif action == 'check_counts':
             result = ToolFunctions.check_label_counts(
-                params.get('label_folder')
+                params.get('label_folder'),
+                int(params.get('threshold', 1))
             )
         elif action == 'check_count_class':
             result = ToolFunctions.check_label_count_class(
@@ -426,6 +471,25 @@ def execute_function():
             result = ToolFunctions.convert_labelme_to_yolo(
                 params.get('input_folder'),
                 params.get('output_folder')
+            )
+        elif action == 'sort_images_by_labels':
+            result = ToolFunctions.sort_images_by_labels(
+                params.get('image_dir'),
+                params.get('label_dir'),
+                params.get('classes_file'),
+                params.get('output_dir')
+            )
+        elif action == 'sam_to_yolo':
+            result = ToolFunctions.sam_to_yolo(
+                params.get('input_dir'),
+                params.get('output_dir')
+            )
+        elif action == 'find_extreme_area_labels':
+            result = ToolFunctions.find_extreme_area_labels(
+                params.get('label_dir'),
+                params.get('image_dir'),
+                int(params.get('above_percent', 150)),
+                int(params.get('below_percent', 50))
             )
         else:
             return jsonify({'success': False, 'error': f'未知操作: {action}'})
